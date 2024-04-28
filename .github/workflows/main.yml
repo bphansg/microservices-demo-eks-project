@@ -27,12 +27,11 @@ jobs:
         run: |
           for dir in src/*/ ; do
             if [ -f "$dir/Dockerfile" ]; then
-              cd $dir
-              echo "Building Docker image in $(pwd)"
-              ls -alh  # Debug: List files in the current service directory
-              docker build -t rajinikanthvadla/dockerchappie:${{ github.sha }}-$dir -f Dockerfile .
-              docker push rajinikanthvadla/dockerchappie:${{ github.sha }}-$dir
-              cd -  # Return to the root directory
+              service_dir=${dir%*/}  # Strip the trailing /
+              service_name=${service_dir##*/}  # Extract the directory name
+              echo "Building Docker image for $service_name in $service_dir"
+              docker build -t rajinikanthvadla/dockerchappie:${{ github.sha }}-$service_name -f $dir/Dockerfile .
+              docker push rajinikanthvadla/dockerchappie:${{ github.sha }}-$service_name
             fi
           done
 
@@ -47,9 +46,11 @@ jobs:
         run: |
           for dir in src/*/ ; do
             if [ -f "$dir/Dockerfile" ]; then
+              service_dir=${dir%*/}  # Strip the trailing /
+              service_name=${service_dir##*/}  # Extract the directory name
               k8s_files=$(find kubernetes-manifests -type f -name "*.yaml" -o -name "*.yml")
               for file in $k8s_files; do
-                kubectl set image -f $file serviceName=${{ basename $dir }} rajinikanthvadla/dockerchappie:${{ github.sha }}-$dir --record
+                kubectl set image -f $file serviceName=$service_name rajinikanthvadla/dockerchappie:${{ github.sha }}-$service_name --record
               done
               kubectl apply -f kubernetes-manifests/
             fi
