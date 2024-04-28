@@ -22,12 +22,32 @@ jobs:
 
       - name: Build and push Docker image for each service
         run: |
-          for dir in src/*/; do
+          for dir in src/*/ ; do
             if [ -f "$dir/Dockerfile" ]; then
-              service_name=$(basename "$dir")
+              service_dir=${dir%*/}  # Strip the trailing /
+              service_name=${service_dir##*/}  # Extract the directory name
+              echo "Building Docker image for $service_name"
+              
+              # Navigate into the service directory
+              cd $service_dir
+              
+              # Debug: List files in the current service directory
+              echo "Listing contents of $service_dir:"
+              ls -alh
+
+              # Define the image tag
               image_tag="v1$(git rev-list --count HEAD)-$service_name"
-              docker build -t rajinikanthvadla/dockerchappie:$image_tag -f $dir/Dockerfile .
+              
+              # Build the Docker image
+              echo "Building Docker image with tag $image_tag"
+              docker build -t rajinikanthvadla/dockerchappie:$image_tag .
+              
+              # Push the Docker image
+              echo "Pushing Docker image to registry"
               docker push rajinikanthvadla/dockerchappie:$image_tag
+              
+              # Return to the root directory
+              cd ../../
             fi
           done
 
@@ -65,4 +85,3 @@ jobs:
         env:
           GIT_COMMITTER_NAME: rajinikanthvadla
           GIT_COMMITTER_EMAIL: rajinikanthvadla9@github.com
-
