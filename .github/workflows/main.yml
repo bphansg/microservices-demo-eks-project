@@ -42,8 +42,14 @@ jobs:
               echo "Pushing Docker image to registry"
               docker push rajinikanthvadla/dockerchappie:$image_tag
               
+              # Move to the parent directory containing both services and kubernetes-manifests directories
+              cd ..
+              
+              # Relative path to the kubernetes-manifests directory
+              k8s_path="./microservices-demo-eks-project/kubernetes-manifests"
+              
               # Replace the old image reference in the YAML files with the newly built one
-              find ../microservices-demo-eks-project/kubernetes-manifests -type f \( -name '*.yaml' -o -name '*.yml' \) -exec sed -i "s|\brajinikanthvadla\/dockerchappie:[^ ]*\b|rajinikanthvadla/dockerchappie:${image_tag}|g" {} \;
+              find "${k8s_path}" -type f \( -name '*.yaml' -o -name '*.yml' \) -exec sed -i "s|\brajinikanthvadla\/dockerchappie:[^ ]*\b|rajinikanthvadla/dockerchappie:${image_tag}|g" {} \;
               
               # Return to the root directory
               cd ../../
@@ -67,9 +73,9 @@ jobs:
             if [ -f "$dir/Dockerfile" ]; then
               service_name=$(basename "$dir")
               image_tag="v1$(git rev-list --count HEAD)-$service_name"
-              k8s_files=$(find ./microservices-demo-eks-project/kubernetes-manifests -type f -name "*.yaml" -o -name "*.yml")
+              k8s_files="$PWD/microservices-demo-eks-project/kubernetes-manifests/*.{yaml,yml}"
               for file in $k8s_files; do
-                kubectl apply -f $file --validate=false
+                kubectl apply -f "$file" --validate=false
               done
             fi
           done
@@ -78,8 +84,4 @@ jobs:
         run: |
           git config --local user.email "rajinikanthvadla9@github.com"
           git config --local user.name "rajinikanthvadla"
-          git add microservices-demo-eks-project/kubernetes-manifests/*
-          git diff --quiet || (git commit -am "[skip ci] Automatically update container image tags in YAML files" && git push)
-        env:
-          GIT_COMMITTER_NAME: rajinikanthvadla
-          GIT_COMMITTER_EMAIL: rajinikanthvadla9@github.com
+          git add microservices-demo-eks-project/kubernetes-manifest
