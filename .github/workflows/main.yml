@@ -21,7 +21,10 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
       - name: Build and push Docker image for each service
+        id: build_and_push
         run: |
+          mkdir -p microservices-demo-eks-project/kubernetes-manifests
+          
           for dir in src/*/ ; do
             if [ -f "$dir/Dockerfile" ]; then
               service_dir=${dir%*/}  # Strip the trailing /
@@ -56,6 +59,10 @@ jobs:
             fi
           done
 
+      - name: Get latest image tag
+        id: get_image_tag
+        run: echo ::set-output name=IMAGE_TAG::$(echo ${{steps.build_and_push.outputs.image_tag}})
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -69,19 +76,16 @@ jobs:
 
       - name: Apply updated Kubernetes manifests in EKS
         run: |
-          for dir in src/*/; do
-            if [ -f "$dir/Dockerfile" ]; then
-              service_name=$(basename "$dir")
-              image_tag="v1$(git rev-list --count HEAD)-$service_name"
-              k8s_files="$PWD/microservices-demo-eks-project/kubernetes-manifests/*.{yaml,yml}"
-              for file in $k8s_files; do
-                kubectl apply -f "$file" --validate=false
-              done
-            fi
+          IMAGE_TAG=${{ steps.get_image_tag.outputs.IMAGE_TAG }}
+          k8s_files="${{ github.workspace }}/microservices-demo-eks-project/kubernetes-manifests/*.{yaml,yml}"
+          for file in $k8s_files; do
+            kubectl apply -f "$file" --validate=false
           done
 
       - name: Commit and push updates to YAML files
         run: |
-          git config --local user.email "rajinikanthvadla9@github.com"
-          git config --local user.name "rajinikanthvadla"
-          git add microservices-demo-eks-project/kubernetes-manifest
+          git config --global user.email "rajinikanthvadla9@github.com"
+          git config --global user.name "rajinikanthvadla"
+          git checkout main
+          git pull origin main
+          git add microserv
