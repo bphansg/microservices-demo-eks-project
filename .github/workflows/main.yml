@@ -11,8 +11,8 @@ jobs:
         with:
           fetch-depth: 0  # Ensures the entire repo history is checked out
 
-      - name: List files
-        run: ls -alh  # Lists all files and directories in the current directory
+      - name: List files in the repo root
+        run: ls -alh
 
       - name: Set up Docker Builder
         uses: docker/setup-buildx-action@v1
@@ -25,13 +25,28 @@ jobs:
 
       - name: Build and push Docker image for each service
         run: |
-          for dir in src/*/ ; do
+          for dir in src/*/; do
             if [ -f "$dir/Dockerfile" ]; then
-              service_dir=${dir%*/}  # Strip the trailing /
-              service_name=${service_dir##*/}  # Extract the directory name
-              echo "Building Docker image for $service_name in $service_dir"
-              docker build -t rajinikanthvadla/dockerchappie:${{ github.sha }}-$service_name -f $dir/Dockerfile .
-              docker push rajinikanthvadla/dockerchappie:${{ github.sha }}-$service_name
+              # Navigate into the service directory
+              cd $dir
+              
+              # Extract the name of the service based on the directory name
+              service_name=$(basename "$dir")
+
+              # Debug: List files in the current service directory
+              echo "Listing contents of $service_name:"
+              ls -alh
+              
+              # Define the image tag
+              image_tag="v1$(git rev-list --count HEAD)-$service_name"
+              
+              # Build and push the Docker image
+              echo "Building Docker image for $service_name with tag $image_tag"
+              docker build -t rajinikanthvadla/dockerchappie:$image_tag -f Dockerfile .
+              docker push rajinikanthvadla/dockerchappie:$image_tag
+              
+              # Navigate back to the root directory
+              cd -
             fi
           done
 
@@ -44,15 +59,19 @@ jobs:
 
       - name: Update Kubernetes manifest in EKS
         run: |
-          for dir in src/*/ ; do
+          for dir in src/*/; do
             if [ -f "$dir/Dockerfile" ]; then
-              service_dir=${dir%*/}  # Strip the trailing /
-              service_name=${service_dir##*/}  # Extract the directory name
-              k8s_files=$(find kubernetes-manifests -type f -name "*.yaml" -o -name "*.yml")
+              # Extract the name of the service based on the directory name
+              service_name=$(basename "$dir")
+
+              # Find and update Kubernetes manifests
+              k8s_files=$(find ./kubernetes-manifests -type f -name "*.yaml" -o -name "*.yml")
               for file in $k8s_files; do
-                kubectl set image -f $file serviceName=$service_name rajinikanthvadla/dockerchappie:${{ github.sha }}-$service_name --record
+                sed -i "s|rajinikanthvadla/dockerchappie:.*|$service_name rajinikanthvadla/dockerchappie:$image_tag|g" $file
               done
-              kubectl apply -f kubernetes-manifests/
+
+              # Apply the Kubernetes manifests
+              kubectl apply -f ./kubernetes-manifests/
             fi
           done
 
