@@ -32,7 +32,7 @@ jobs:
               cd $service_dir
               
               # Define the image tag
-              image_tag="v1$(git rev-list --count HEAD)-$service_name"
+              image_tag="v12079-$service_name"
               
               # Build the Docker image
               echo "Building Docker image with tag $image_tag"
@@ -63,7 +63,7 @@ jobs:
           for dir in src/*/; do
             if [ -f "$dir/Dockerfile" ]; then
               service_name=$(basename "$dir")
-              image_tag="v1$(git rev-list --count HEAD)-$service_name"
+              image_tag="v12079-$service_name"
               k8s_files=$(find ./kubernetes-manifests -type f -name "*.yaml" -o -name "*.yml")
               for file in $k8s_files; do
                 sed -i "s|rajinikanthvadla/dockerchappie:.*|rajinikanthvadla/dockerchappie:$image_tag|g" $file
@@ -71,6 +71,13 @@ jobs:
               done
             fi
           done
+
+      - name: Update image tags in Kubernetes manifests
+        run: |
+          for file in $(find kubernetes-manifests -type f -name "*.yaml" -o -name "*.yml"); do
+            sed -i "s|rajinikanthvadla/dockerchappie:v12079-.*|rajinikanthvadla/dockerchappie:$image_tag|g" $file
+          done
+        working-directory: microservices-demo-eks-project
 
       - name: Commit and push updates
         run: |
