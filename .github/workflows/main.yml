@@ -11,9 +11,6 @@ jobs:
         with:
           fetch-depth: 0  # Ensures the entire repo history is checked out
 
-      - name: List files in the repo root
-        run: ls -alh
-
       - name: Set up Docker Builder
         uses: docker/setup-buildx-action@v1
 
@@ -27,26 +24,10 @@ jobs:
         run: |
           for dir in src/*/; do
             if [ -f "$dir/Dockerfile" ]; then
-              # Navigate into the service directory
-              cd $dir
-              
-              # Extract the name of the service based on the directory name
               service_name=$(basename "$dir")
-
-              # Debug: List files in the current service directory
-              echo "Listing contents of $service_name:"
-              ls -alh
-              
-              # Define the image tag
               image_tag="v1$(git rev-list --count HEAD)-$service_name"
-              
-              # Build and push the Docker image
-              echo "Building Docker image for $service_name with tag $image_tag"
-              docker build -t rajinikanthvadla/dockerchappie:$image_tag -f Dockerfile .
+              docker build -t rajinikanthvadla/dockerchappie:$image_tag -f $dir/Dockerfile .
               docker push rajinikanthvadla/dockerchappie:$image_tag
-              
-              # Navigate back to the root directory
-              cd -
             fi
           done
 
@@ -57,28 +38,31 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Configure Kubernetes
+        run: |
+          echo "${{ secrets.KUBECONFIG_CONTENT }}" > kubeconfig
+          export KUBECONFIG=$PWD/kubeconfig
+
       - name: Update Kubernetes manifest in EKS
         run: |
           for dir in src/*/; do
             if [ -f "$dir/Dockerfile" ]; then
-              # Extract the name of the service based on the directory name
               service_name=$(basename "$dir")
-
-              # Find and update Kubernetes manifests
+              image_tag="v1$(git rev-list --count HEAD)-$service_name"
               k8s_files=$(find ./kubernetes-manifests -type f -name "*.yaml" -o -name "*.yml")
               for file in $k8s_files; do
                 sed -i "s|rajinikanthvadla/dockerchappie:.*|$service_name rajinikanthvadla/dockerchappie:$image_tag|g" $file
+                kubectl apply -f $file --validate=false
               done
-
-              # Apply the Kubernetes manifests
-              kubectl apply -f ./kubernetes-manifests/
             fi
           done
 
       - name: Commit and push updates
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "Update Kubernetes manifests with new image tags [skip ci]"
-          git push
+          git config --local user.email "rajinikanthvadla9@github.com"
+          git config --local user.name "rajinikanthvadla"
+          git diff --quiet && git diff --staged --quiet || (git commit -am "Update Kubernetes manifests with new image tags [skip ci]" && git push)
+        env:
+          GIT_COMMITTER_NAME: rajinikanthvadla
+          GIT_COMMITTER_EMAIL: rajinikanthvadla9@github.com
+
