@@ -1,0 +1,78 @@
+name: Build, Push and Deploy Docker Images
+
+on:
+  push:
+    paths:
+      - 'src/**/Dockerfile'
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Builder
+        uses: docker/setup-buildx-action@v1
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: rajinikanthvadla
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: rajinikanthvadla/dockerchappie
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha
+
+      - name: Build and push Docker image for each service
+        run: |
+          for dir in src/*/ ; do
+            if [ -f "$dir/Dockerfile" ]; then
+              service_name=$(basename $dir)
+              image_tag="v1$(git rev-list --count HEAD):$service_name"
+              docker build -t rajinikanthvadla/dockerchappie:$image_tag -f $dir/Dockerfile .
+              docker push rajinikanthvadla/dockerchappie:$image_tag
+
+              # Update Kubernetes manifests
+              k8s_files=$(find . -type f -name "*service.yaml" -o -name "*service.yml")
+              for file in $k8s_files; do
+                sed -i "s|image: rajinikanthvadla/dockerchappie.*|image: rajinikanthvadla/dockerchappie:$image_tag|g" $file
+              done
+            fi
+          done
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update Kubernetes manifest in EKS
+        run: |
+          for dir in src/*/ ; do
+            if [ -f "$dir/Dockerfile" ]; then
+              service_name=$(basename $dir)
+              image_tag="v1$(git rev-list --count HEAD):$service_name"
+              k8s_files=$(find . -type f -name "*service.yaml" -o -name "*service.yml")
+              for file in $k8s_files; do
+                kubectl set image -f $file serviceName=$service_name rajinikanthvadla/dockerchappie:$image_tag --record
+              done
+              kubectl apply -f kubernetes-manifests/
+            fi
+          done
+
+      - name: Commit and push updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Update Kubernetes manifests with new image tags [skip ci]"
+          git push
+
