@@ -31,10 +31,6 @@ jobs:
               # Navigate into the service directory
               cd $service_dir
               
-              # Debug: List files in the current service directory
-              echo "Listing contents of $service_dir:"
-              ls -alh
-
               # Define the image tag
               image_tag="v1$(git rev-list --count HEAD)-$service_name"
               
@@ -60,7 +56,8 @@ jobs:
 
       - name: Configure Kubernetes
         run: |
-          aws eks update-kubeconfig --name eksdemo --region ap-south-1
+          echo "${{ secrets.KUBECONFIG_CONTENT }}" > kubeconfig
+          export KUBECONFIG=$PWD/kubeconfig
 
       - name: Update Kubernetes manifest in EKS
         run: |
@@ -70,7 +67,7 @@ jobs:
               image_tag="v1$(git rev-list --count HEAD)-$service_name"
               k8s_files=$(find ./kubernetes-manifests -type f -name "*.yaml" -o -name "*.yml")
               for file in $k8s_files; do
-                sed -i "s|rajinikanthvadla/dockerchappie:.*|$service_name rajinikanthvadla/dockerchappie:$image_tag|g" $file
+                sed -i "s|rajinikanthvadla/dockerchappie:.*|rajinikanthvadla/dockerchappie:$image_tag|g" $file
                 kubectl apply -f $file --validate=false
               done
             fi
