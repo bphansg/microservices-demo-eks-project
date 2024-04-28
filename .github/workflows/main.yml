@@ -56,8 +56,7 @@ jobs:
 
       - name: Configure Kubernetes
         run: |
-          echo "${{ secrets.KUBECONFIG_CONTENT }}" > kubeconfig
-          export KUBECONFIG=$PWD/kubeconfig
+          aws eks update-kubeconfig --name eksdemo --region ap-south-1
 
       - name: Update Kubernetes manifest in EKS
         run: |
