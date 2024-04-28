@@ -1,9 +1,6 @@
 name: Build, Push and Deploy Docker Images
 
-on:
-  push:
-    paths:
-      - 'src/**/Dockerfile'
+on: push
 
 jobs:
   build-push-deploy:
@@ -75,4 +72,3 @@ jobs:
           git add .
           git commit -m "Update Kubernetes manifests with new image tags [skip ci]"
           git push
-
