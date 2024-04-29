@@ -43,13 +43,9 @@ jobs:
               docker push rajinikanthvadla/dockerchappie:$image_tag
               
               # Update image references in YAML files
-              find "microservices-demo-eks-project/kubernetes-manifests" -type f -name '*.yaml' -o -name '*.yml' -exec sed -i "s|rajinikanthvadla/dockerchappie:[^ ]*|rajinikanthvadla/dockerchappie:${image_tag}|g" {} +
+              find "microservices-demo-eks-project/kubernetes-manifests" -type f -name '*.yaml' -exec sed -i "s|rajinikanthvadla/dockerchappie:[^ ]*|rajinikanthvadla/dockerchappie:${image_tag}|g" {} +
             fi
           done
-
-      - name: Get latest image tag
-        id: get_image_tag
-        run: echo ::set-output name=IMAGE_TAG::$(echo ${{steps.build_and_push.outputs.image_tag}})
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -64,8 +60,7 @@ jobs:
 
       - name: Apply updated Kubernetes manifests in EKS
         run: |
-          IMAGE_TAG=${{ steps.get_image_tag.outputs.IMAGE_TAG }}
-          kubectl apply -f "microservices-demo-eks-project/kubernetes-manifests" --validate=false
+          kubectl apply -f "microservices-demo-eks-project/kubernetes-manifests" --recursive --validate=false
 
       - name: Commit and push updates to YAML files
         run: |
