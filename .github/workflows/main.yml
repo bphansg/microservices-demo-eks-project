@@ -25,37 +25,25 @@ jobs:
         run: |
           mkdir -p microservices-demo-eks-project/kubernetes-manifests
           
-          for dir in src/*/ ; do
+          # Loop through each service directory
+          for dir in src/*/; do
             if [ -f "$dir/Dockerfile" ]; then
-              service_dir=${dir%*/}  # Strip the trailing /
-              service_name=${service_dir##*/}  # Extract the directory name
+              service_name=$(basename "$dir")
               echo "Building Docker image for $service_name"
-              
-              # Navigate into the service directory
-              cd $service_dir
               
               # Define the image tag
               image_tag="v1$(git rev-list --count HEAD)-$service_name"
               
               # Build the Docker image
               echo "Building Docker image with tag $image_tag"
-              docker build -t rajinikanthvadla/dockerchappie:$image_tag .
+              docker build -t rajinikanthvadla/dockerchappie:$image_tag "$dir"
               
               # Push the Docker image
               echo "Pushing Docker image to registry"
               docker push rajinikanthvadla/dockerchappie:$image_tag
               
-              # Move to the parent directory containing both services and kubernetes-manifests directories
-              cd ..
-              
-              # Relative path to the kubernetes-manifests directory
-              k8s_path="./microservices-demo-eks-project/kubernetes-manifests"
-              
-              # Replace the old image reference in the YAML files with the newly built one
-              find "${k8s_path}" -type f \( -name '*.yaml' -o -name '*.yml' \) -exec sed -i "s|\brajinikanthvadla\/dockerchappie:[^ ]*\b|rajinikanthvadla/dockerchappie:${image_tag}|g" {} \;
-              
-              # Return to the root directory
-              cd ../../
+              # Update image references in YAML files
+              find "microservices-demo-eks-project/kubernetes-manifests" -type f -name '*.yaml' -o -name '*.yml' -exec sed -i "s|rajinikanthvadla/dockerchappie:[^ ]*|rajinikanthvadla/dockerchappie:${image_tag}|g" {} +
             fi
           done
 
@@ -77,15 +65,12 @@ jobs:
       - name: Apply updated Kubernetes manifests in EKS
         run: |
           IMAGE_TAG=${{ steps.get_image_tag.outputs.IMAGE_TAG }}
-          k8s_files="${{ github.workspace }}/microservices-demo-eks-project/kubernetes-manifests/*.{yaml,yml}"
-          for file in $k8s_files; do
-            kubectl apply -f "$file" --validate=false
-          done
+          kubectl apply -f "microservices-demo-eks-project/kubernetes-manifests" --validate=false
 
       - name: Commit and push updates to YAML files
         run: |
           git config --global user.email "rajinikanthvadla9@github.com"
           git config --global user.name "rajinikanthvadla"
-          git checkout main
-          git pull origin main
-          git add microserv
+          git add "microservices-demo-eks-project/kubernetes-manifests"
+          git commit -m "Update Docker image references in YAML files"
+          git push origin main
