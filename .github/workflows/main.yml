@@ -21,44 +21,53 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
-           username: ${{ secrets.DOCKERHUB_USERNAME }}
-           password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-           - name: Check Docker Hub repositories and build/push images
-           run: |
-             # Get the list of changed files
-             CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
-             
-             # Loop through each service directory
-             for dir in src/*/; do
-               if [ -f "$dir/Dockerfile" ]; then
-                 service_name=$(basename "$dir")
-                 
-                 # Check if the repository exists in Docker Hub
-                 if ! curl -s -f -L -o /dev/null https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/$service_name; then
-                   echo "Repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name does not exist in Docker Hub. Creating it..."
-                   # You may need to use Docker Hub API to create the repository programmatically
-                   # For now, we'll just print a message
-                   echo "Please create the repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name manually in Docker Hub."
-                 fi
-                 
-                 # Check if any files in this service directory have changed or if the image doesn't exist
-                 if echo "$CHANGED_FILES" | grep -q "$dir" || ! docker manifest inspect ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest > /dev/null 2>&1; then
-                   echo "Changes detected or image not found for $service_name. Building and pushing Docker image."
-                   
-                   # Build the Docker image
-                   docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"
-                   
-                   # Push the Docker image
-                   docker push ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest
-                   
-                   # Update image references in YAML files
-                   sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" release/kubernetes-manifests.yaml
-                 else
-                   echo "No changes detected and image exists for $service_name. Skipping build and push."
-                 fi
-               fi
-             done         
+      - name: Check Docker Hub repositories and build/push images
+        run: |
+          # Get the list of changed files
+          CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+          
+          # Loop through each service directory
+          for dir in src/*/; do
+            if [ -f "$dir/Dockerfile" ]; then
+              service_name=$(basename "$dir")
+              
+              echo "Processing service: $service_name"
+              
+              # Check if the repository exists in Docker Hub
+              if ! curl -s -f -L -o /dev/null https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/$service_name; then
+                echo "Repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name does not exist in Docker Hub."
+                echo "Please create the repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name manually in Docker Hub."
+                continue
+              fi
+              
+              # Check if any files in this service directory have changed or if the image doesn't exist
+              if echo "$CHANGED_FILES" | grep -q "$dir" || ! docker manifest inspect ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest > /dev/null 2>&1; then
+                echo "Changes detected or image not found for $service_name. Building and pushing Docker image."
+                
+                # Build the Docker image
+                if docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"; then
+                  echo "Successfully built image for $service_name"
+                  
+                  # Push the Docker image
+                  if docker push ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest; then
+                    echo "Successfully pushed image for $service_name"
+                    
+                    # Update image references in YAML files
+                    sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" release/kubernetes-manifests.yaml
+                  else
+                    echo "Failed to push image for $service_name"
+                  fi
+                else
+                  echo "Failed to build image for $service_name"
+                fi
+              else
+                echo "No changes detected and image exists for $service_name. Skipping build and push."
+              fi
+            fi
+          done
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
