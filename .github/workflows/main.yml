@@ -11,10 +11,6 @@ jobs:
         with:
           fetch-depth: 0  # Ensures the entire repo history is checked out
 
-      - name: Update Kubernetes manifests
-        run: |
-          sed -i "s|tyrion75/westeros:v1\${COMMIT_COUNT}-|${{ secrets.DOCKERHUB_USERNAME }}/westeros:v1$(git rev-list --count HEAD)-|g" release/kubernetes-manifests.yaml
-
       - name: Install kubectl
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -36,27 +32,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.X_PRINCIPAL_ARN }}
+          role-duration-seconds: 3600
 
-      - name: Set AWS security token and principal ARN
-        run: |
-          export AWS_SECURITY_TOKEN=${{ secrets.AWS_SECURITY_TOKEN }}
-          export X_PRINCIPAL_ARN=${{ secrets.X_PRINCIPAL_ARN }}
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
 
-      - name: Verify AWS and EKS access
+      - name: Get EKS cluster credentials
         run: |
-          aws sts get-caller-identity
-          aws eks list-clusters --region ${{ secrets.AWS_REGION }}
-
-      - name: Configure kubectl
-        run: |
-          aws eks --region ${{ secrets.AWS_REGION }} update-kubeconfig --name BP-test
-          kubectl config view --raw > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
+          aws eks get-token --cluster-name BP-test --region ${{ secrets.AWS_REGION }} > token.json
+          aws eks update-kubeconfig --name BP-test --region ${{ secrets.AWS_REGION }}
 
       - name: Verify cluster access
         run: |
           kubectl cluster-info
           kubectl get nodes
+
+      - name: Update Kubernetes manifests
+        run: |
+          sed -i "s|tyrion75/westeros:v1\${COMMIT_COUNT}-|${{ secrets.DOCKERHUB_USERNAME }}/westeros:v1$(git rev-list --count HEAD)-|g" release/kubernetes-manifests.yaml
 
       - name: Verify EKS Permissions
         run: |
