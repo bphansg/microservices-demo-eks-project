@@ -22,7 +22,7 @@ spec:
           value: frontend:80
         - name: USERS
           value: '10'
-        image: loadgenerator
+        image: tyrion75/loadgenerator:latest
         name: main
         resources:
           limits:

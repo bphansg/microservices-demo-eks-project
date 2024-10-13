@@ -17,7 +17,7 @@ spec:
       - env:
         - name: PORT
           value: '9555'
-        image: adservice
+        image: tyrion75/adservice:latest
         livenessProbe:
           grpc:
             port: 9555

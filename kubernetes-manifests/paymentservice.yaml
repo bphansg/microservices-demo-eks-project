@@ -19,7 +19,7 @@ spec:
           value: '50051'
         - name: DISABLE_PROFILER
           value: '1'
-        image: paymentservice
+        image: tyrion75/paymentservice:latest
         livenessProbe:
           grpc:
             port: 50051

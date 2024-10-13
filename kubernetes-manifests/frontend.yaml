@@ -37,7 +37,7 @@ spec:
           value: shoppingassistantservice:80
         - name: ENABLE_PROFILER
           value: '0'
-        image: frontend
+        image: tyrion75/frontend:latest
         livenessProbe:
           httpGet:
             httpHeaders:

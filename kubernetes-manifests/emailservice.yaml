@@ -19,7 +19,7 @@ spec:
           value: '8080'
         - name: DISABLE_PROFILER
           value: '1'
-        image: emailservice
+        image: tyrion75/emailservice:latest
         livenessProbe:
           grpc:
             port: 8080

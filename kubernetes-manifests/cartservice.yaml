@@ -17,7 +17,7 @@ spec:
       - env:
         - name: REDIS_ADDR
           value: redis-cart:6379
-        image: cartservice
+        image: tyrion75/cartservice:latest
         livenessProbe:
           grpc:
             port: 7070
