@@ -106,7 +106,7 @@ spec:
     targetPort: 8080
   selector:
     app: frontend
-  type: LoadBalancer
+  type: ClusterIP
 ---
 apiVersion: v1
 kind: ServiceAccount
