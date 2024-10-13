@@ -15,6 +15,20 @@ jobs:
         run: |
           sed -i "s|tyrion75/westeros:v1\${COMMIT_COUNT}-|${{ secrets.DOCKERHUB_USERNAME }}/westeros:v1$(git rev-list --count HEAD)-|g" release/kubernetes-manifests.yaml
 
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+          kubectl version --client
+
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+          aws --version
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -33,36 +47,27 @@ jobs:
           aws sts get-caller-identity
           aws eks list-clusters --region ${{ secrets.AWS_REGION }}
 
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name BP-test --region ${{ secrets.AWS_REGION }}
+
+      - name: Get EKS token and apply
+        run: |
+          aws eks get-token --cluster-name BP-test --region ${{ secrets.AWS_REGION }} > token.json
+          kubectl apply -f token.json
+
+      - name: Verify cluster access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
       - name: Verify EKS Permissions
         run: |
-          # Update kubeconfig
-          aws eks update-kubeconfig --name BP-test --region ${{ secrets.AWS_REGION }}
-          
-          # Test cluster access
-          kubectl cluster-info
-          
-          # List nodes
-          kubectl get nodes
-          
-          # List pods in all namespaces
           kubectl get pods --all-namespaces
-          
-          # List services in all namespaces
           kubectl get services --all-namespaces
-          
-          # Describe a specific namespace (e.g., kube-system)
           kubectl describe namespace kube-system
-          
-          # Attempt to create a test pod
           kubectl run test-pod --image=nginx --restart=Never
-          
-          # Attempt to delete the test pod
           kubectl delete pod test-pod
-
-      - name: Configure Kubernetes
-        run: |
-          aws eks get-token --cluster-name BP-test --region ${{ secrets.AWS_REGION }} | kubectl apply -f -
-          aws eks update-kubeconfig --name BP-test --region ${{ secrets.AWS_REGION }}
 
       - name: Apply updated Kubernetes manifests in EKS
         run: |
