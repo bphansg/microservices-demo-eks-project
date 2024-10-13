@@ -38,12 +38,21 @@ jobs:
               echo "Directory: $dir"
               echo "Changed files: $CHANGED_FILES"
               
+              # Check if the corresponding YAML file exists in kubernetes-manifests/
+              if [ -f "kubernetes-manifests/${service_name}.yaml" ]; then
+                echo "Found kubernetes manifest for ${service_name}"
+                # Read the manifest file
+                manifest_content=$(cat "kubernetes-manifests/${service_name}.yaml")
+                echo "Manifest content for ${service_name}:"
+                echo "$manifest_content"
+              else
+                echo "Warning: No kubernetes manifest found for ${service_name}"
+              fi
+              
               # Check if the repository exists in Docker Hub
               if ! curl -s -f -L -o /dev/null https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/$service_name; then
                 echo "Repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name does not exist in Docker Hub."
                 echo "Creating repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name in Docker Hub."
-                # You may need to use Docker Hub API to create the repository programmatically
-                # For now, we'll continue and attempt to push, which should create the repo
               fi
               
               # Check if any files in this service directory have changed, if the image doesn't exist, or if it's the cartservice
@@ -60,6 +69,12 @@ jobs:
                     
                     # Update image references in YAML files
                     sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" release/kubernetes-manifests.yaml
+                    
+                    # Update individual service manifest if it exists
+                    if [ -f "kubernetes-manifests/${service_name}.yaml" ]; then
+                      sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" "kubernetes-manifests/${service_name}.yaml"
+                      echo "Updated image reference in kubernetes-manifests/${service_name}.yaml"
+                    fi
                   else
                     echo "Failed to push image for $service_name"
                   fi
@@ -87,10 +102,15 @@ jobs:
       - name: Apply updated Kubernetes manifests in EKS
         run: |
           kubectl apply -f release/kubernetes-manifests.yaml --validate=false
+          
+          # Apply individual service manifests
+          for manifest in kubernetes-manifests/*.yaml; do
+            kubectl apply -f "$manifest" --validate=false
+          done
 
       - name: Commit and push updates to YAML files
         run: |
           git config --global user.email "binhphan@me.com"
           git config --global user.name "bphansg"
-          git add release/kubernetes-manifests.yaml
+          git add release/kubernetes-manifests.yaml kubernetes-manifests/*.yaml
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update Docker image references in YAML files" && git push)
