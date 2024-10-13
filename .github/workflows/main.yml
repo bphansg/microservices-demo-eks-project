@@ -11,6 +11,10 @@ jobs:
         with:
           fetch-depth: 0  # Ensures the entire repo history is checked out
 
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
@@ -20,22 +24,31 @@ jobs:
            username: ${{ secrets.DOCKERHUB_USERNAME }}
            password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Docker image for each service
+      - name: Build and push Docker image for changed services
         run: |
+          # Get the list of changed files
+          CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+          
           # Loop through each service directory
           for dir in src/*/; do
             if [ -f "$dir/Dockerfile" ]; then
               service_name=$(basename "$dir")
-              echo "Building Docker image for $service_name"
               
-              # Build the Docker image
-              docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"
-              
-              # Push the Docker image
-              docker push ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest
-              
-              # Update image references in YAML files
-              sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" release/kubernetes-manifests.yaml
+              # Check if any files in this service directory have changed
+              if echo "$CHANGED_FILES" | grep -q "$dir"; then
+                echo "Changes detected in $service_name. Building and pushing Docker image."
+                
+                # Build the Docker image
+                docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"
+                
+                # Push the Docker image
+                docker push ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest
+                
+                # Update image references in YAML files
+                sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" release/kubernetes-manifests.yaml
+              else
+                echo "No changes detected in $service_name. Skipping build and push."
+              fi
             fi
           done
 
