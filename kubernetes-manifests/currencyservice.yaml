@@ -43,7 +43,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: currencyservice
+        image: tyrion75/westeros:v1${COMMIT_COUNT}-currencyservice
         ports:
         - name: grpc
           containerPort: 7000

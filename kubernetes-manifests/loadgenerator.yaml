@@ -64,7 +64,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: busybox:latest
+        image: tyrion75/westeros:v1${COMMIT_COUNT}-loadgenerator
         env:
         - name: FRONTEND_ADDR
           value: "frontend:80"
@@ -77,7 +77,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: loadgenerator
+        image: tyrion75/westeros:v1${COMMIT_COUNT}-loadgenerator
         env:
         - name: FRONTEND_ADDR
           value: "frontend:80"
