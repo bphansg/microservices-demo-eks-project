@@ -7,12 +7,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0  # Ensures the entire repo history is checked out
 
       - name: Set up Docker Builder
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -23,8 +23,6 @@ jobs:
       - name: Build and push Docker image for each service
         id: build_and_push
         run: |
-          mkdir -p microservices-demo-eks-project/kubernetes-manifests
-          
           # Loop through each service directory
           for dir in src/*/; do
             if [ -f "$dir/Dockerfile" ]; then
@@ -36,16 +34,17 @@ jobs:
               
               # Build the Docker image
               echo "Building Docker image with tag $image_tag"
-              docker build -t tyrion75/westeros:$image_tag "$dir"
+              docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/westeros:$image_tag "$dir"
               
               # Push the Docker image
               echo "Pushing Docker image to registry"
-              docker push tyrion75/westeros:$image_tag
-              
-              # Update image references in YAML files
-              find "microservices-demo-eks-project/kubernetes-manifests" -type f -name '*.yaml' -exec sed -i "s|tyrion75/westeros:[^ ]*|tyrion75/westeros:${image_tag}|g" {} +
+              docker push ${{ secrets.DOCKERHUB_USERNAME }}/westeros:$image_tag
             fi
           done
+
+      - name: Update Kubernetes manifests
+        run: |
+          sed -i "s|tyrion75/westeros:v1\${COMMIT_COUNT}-|${{ secrets.DOCKERHUB_USERNAME }}/westeros:v1$(git rev-list --count HEAD)-|g" release/kubernetes-manifests.yaml
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -56,16 +55,15 @@ jobs:
 
       - name: Configure Kubernetes
         run: |
-          aws eks update-kubeconfig --name BP-test --region us-west-2
+          aws eks update-kubeconfig --name BP-test --region ${{ secrets.AWS_REGION }}
 
       - name: Apply updated Kubernetes manifests in EKS
         run: |
-          kubectl apply -f "microservices-demo-eks-project/kubernetes-manifests" --recursive --validate=false
+          kubectl apply -f release/kubernetes-manifests.yaml
 
       - name: Commit and push updates to YAML files
         run: |
           git config --global user.email "binhphan@me.com"
           git config --global user.name "bphansg"
-          git add "microservices-demo-eks-project/kubernetes-manifests"
-          git commit -m "Update Docker image references in YAML files"
-          git push origin main
+          git add release/kubernetes-manifests.yaml
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update Docker image references in YAML files" && git push)
