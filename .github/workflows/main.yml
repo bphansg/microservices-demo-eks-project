@@ -1,4 +1,4 @@
-name: Build, Push and Deploy Docker Images - CNAPP demo
+name: Build, Push and Deploy Docker Images - CNAPP demo BP
 
 on: push
 
