@@ -32,8 +32,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
-          role-to-assume: ${{ secrets.X_PRINCIPAL_ARN }}
-          role-duration-seconds: 3600
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
