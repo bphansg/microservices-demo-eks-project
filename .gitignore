@@ -26,4 +26,4 @@ obj/
 pkg/
 release/wi-kubernetes-manifests.yaml
 vendor/
-update-manifests.py
+update-manifests*.py
