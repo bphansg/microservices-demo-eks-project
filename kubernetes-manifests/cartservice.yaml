@@ -88,7 +88,7 @@ spec:
         app: redis-cart
     spec:
       containers:
-      - image: redis:alpine
+      - image: tyrion75/cartservice:latest
         livenessProbe:
           periodSeconds: 5
           tcpSocket:

@@ -52,7 +52,7 @@ spec:
         env:
         - name: FRONTEND_ADDR
           value: frontend:80
-        image: busybox:latest
+        image: tyrion75/loadgenerator:latest
         name: frontend-check
         securityContext:
           allowPrivilegeEscalation: false
