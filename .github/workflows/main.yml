@@ -101,7 +101,7 @@ jobs:
 
       - name: Apply updated Kubernetes manifests in EKS
         run: |
-          kubectl apply -f release/kubernetes-manifests.yaml --validate=false
+          kubectl apply -f release/kubernetes-manifests.yaml -n online-boutique --validate=false
           
           # Apply individual service manifests
           for manifest in kubernetes-manifests/*.yaml; do
