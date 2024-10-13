@@ -34,9 +34,9 @@ jobs:
             if [ -f "$dir/Dockerfile" ]; then
               service_name=$(basename "$dir")
               
-              # Check if any files in this service directory have changed
-              if echo "$CHANGED_FILES" | grep -q "$dir"; then
-                echo "Changes detected in $service_name. Building and pushing Docker image."
+              # Check if any files in this service directory have changed or if the image doesn't exist
+              if echo "$CHANGED_FILES" | grep -q "$dir" || ! docker pull ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest &> /dev/null; then
+                echo "Changes detected or image not found for $service_name. Building and pushing Docker image."
                 
                 # Build the Docker image
                 docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"
@@ -47,7 +47,7 @@ jobs:
                 # Update image references in YAML files
                 sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" release/kubernetes-manifests.yaml
               else
-                echo "No changes detected in $service_name. Skipping build and push."
+                echo "No changes detected and image exists for $service_name. Skipping build and push."
               fi
             fi
           done
