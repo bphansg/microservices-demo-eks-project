@@ -280,7 +280,7 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v1${COMMIT_COUNT}-checkoutservice
+          image: tyrion75/westeros:v1${COMMIT_COUNT}-checkoutservice
           ports:
           - containerPort: 5050
           readinessProbe:
@@ -728,7 +728,7 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v1${COMMIT_COUNT}-frontend
+          image: tyrion75/westeros:v1${COMMIT_COUNT}-frontend
           ports:
           - containerPort: 8080
           readinessProbe:
