@@ -20,6 +20,7 @@ spec:
         - name: DISABLE_PROFILER
           value: '1'
         image: tyrion75/currencyservice:latest
+        imagePullPolicy: Always
         livenessProbe:
           grpc:
             port: 7000
@@ -97,6 +98,7 @@ spec:
         - name: USERS
           value: '10'
         image: tyrion75/loadgenerator:latest
+        imagePullPolicy: Always
         name: main
         resources:
           limits:
@@ -171,6 +173,7 @@ spec:
         - name: DISABLE_PROFILER
           value: '1'
         image: tyrion75/productcatalogservice:latest
+        imagePullPolicy: Always
         livenessProbe:
           grpc:
             port: 3550
@@ -254,6 +257,7 @@ spec:
         - name: CART_SERVICE_ADDR
           value: cartservice:7070
         image: tyrion75/checkoutservice:latest
+        imagePullPolicy: Always
         livenessProbe:
           grpc:
             port: 5050
@@ -326,6 +330,7 @@ spec:
         - name: DISABLE_PROFILER
           value: '1'
         image: tyrion75/shippingservice:latest
+        imagePullPolicy: Always
         livenessProbe:
           grpc:
             port: 50051
@@ -397,6 +402,7 @@ spec:
         - name: REDIS_ADDR
           value: redis-cart:6379
         image: tyrion75/cartservice:latest
+        imagePullPolicy: Always
         livenessProbe:
           grpc:
             port: 7070
@@ -468,6 +474,7 @@ spec:
     spec:
       containers:
       - image: redis:alpine
+        imagePullPolicy: Always
         livenessProbe:
           periodSeconds: 5
           tcpSocket:
@@ -542,6 +549,7 @@ spec:
         - name: DISABLE_PROFILER
           value: '1'
         image: tyrion75/emailservice:latest
+        imagePullPolicy: Always
         livenessProbe:
           grpc:
             port: 8080
@@ -617,6 +625,7 @@ spec:
         - name: DISABLE_PROFILER
           value: '1'
         image: tyrion75/paymentservice:latest
+        imagePullPolicy: Always
         livenessProbe:
           grpc:
             port: 50051
@@ -708,6 +717,7 @@ spec:
         - name: ENABLE_PROFILER
           value: '0'
         image: tyrion75/frontend:latest
+        imagePullPolicy: Always
         livenessProbe:
           httpGet:
             httpHeaders:
@@ -807,6 +817,7 @@ spec:
         - name: DISABLE_PROFILER
           value: '1'
         image: tyrion75/recommendationservice:latest
+        imagePullPolicy: Always
         livenessProbe:
           grpc:
             port: 8080
@@ -880,6 +891,7 @@ spec:
         - name: PORT
           value: '9555'
         image: tyrion75/adservice:latest
+        imagePullPolicy: Always
         livenessProbe:
           grpc:
             port: 9555
