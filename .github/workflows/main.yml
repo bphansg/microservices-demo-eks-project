@@ -58,6 +58,32 @@ jobs:
           aws sts get-caller-identity
           aws eks list-clusters --region ${{ secrets.AWS_REGION }}
 
+      - name: Verify EKS Permissions
+        run: |
+          # Update kubeconfig
+          aws eks update-kubeconfig --name BP-test --region ${{ secrets.AWS_REGION }}
+          
+          # Test cluster access
+          kubectl cluster-info
+          
+          # List nodes
+          kubectl get nodes
+          
+          # List pods in all namespaces
+          kubectl get pods --all-namespaces
+          
+          # List services in all namespaces
+          kubectl get services --all-namespaces
+          
+          # Describe a specific namespace (e.g., kube-system)
+          kubectl describe namespace kube-system
+          
+          # Attempt to create a test pod
+          kubectl run test-pod --image=nginx --restart=Never
+          
+          # Attempt to delete the test pod
+          kubectl delete pod test-pod
+
       - name: Configure Kubernetes
         run: |
           aws eks get-token --cluster-name BP-test --region ${{ secrets.AWS_REGION }} | kubectl apply -f -
