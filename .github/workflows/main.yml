@@ -53,13 +53,19 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Verify AWS and EKS access
+        run: |
+          aws sts get-caller-identity
+          aws eks list-clusters --region ${{ secrets.AWS_REGION }}
+
       - name: Configure Kubernetes
         run: |
+          aws eks get-token --cluster-name BP-test --region ${{ secrets.AWS_REGION }} | kubectl apply -f -
           aws eks update-kubeconfig --name BP-test --region ${{ secrets.AWS_REGION }}
 
       - name: Apply updated Kubernetes manifests in EKS
         run: |
-          kubectl apply -f release/kubernetes-manifests.yaml
+          kubectl apply -f release/kubernetes-manifests.yaml --validate=false
 
       - name: Commit and push updates to YAML files
         run: |
