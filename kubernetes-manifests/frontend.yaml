@@ -44,7 +44,7 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-          image: tyrion75/westeros:v1${COMMIT_COUNT}-frontend
+          image: tyrion75/frontend:latest
           ports:
           - containerPort: 8080
           readinessProbe:

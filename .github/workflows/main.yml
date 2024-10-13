@@ -28,17 +28,14 @@ jobs:
               service_name=$(basename "$dir")
               echo "Building Docker image for $service_name"
               
-              # Define the image tag
-              image_tag="v1$(git rev-list --count HEAD)-$service_name"
-              
               # Build the Docker image
-              docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/westeros:$image_tag "$dir"
+              docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"
               
               # Push the Docker image
-              docker push ${{ secrets.DOCKERHUB_USERNAME }}/westeros:$image_tag
+              docker push ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest
               
               # Update image references in YAML files
-              sed -i "s|tyrion75/westeros:v1\${COMMIT_COUNT}-$service_name|${{ secrets.DOCKERHUB_USERNAME }}/westeros:$image_tag|g" release/kubernetes-manifests.yaml
+              sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" release/kubernetes-manifests.yaml
             fi
           done
 

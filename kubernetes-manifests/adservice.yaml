@@ -43,7 +43,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v1${COMMIT_COUNT}-adservice
+        image: tyrion75/adservice:latest
         ports:
         - containerPort: 9555
         env:

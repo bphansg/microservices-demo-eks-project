@@ -49,7 +49,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v12102-currencyservice
+        image: tyrion75/currencyservice:latest
         ports:
         - name: grpc
           containerPort: 7000
@@ -145,7 +145,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: busybox:latest
+        image: tyrion75/image: busybox:latest
         env:
         - name: FRONTEND_ADDR
           value: "frontend:80"
@@ -158,7 +158,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v12102-loadgenerator
+        image: tyrion75/loadgenerator:latest
         env:
         - name: FRONTEND_ADDR
           value: "frontend:80"
@@ -208,7 +208,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v12102-productcatalogservice
+        image: tyrion75/productcatalogservice:latest
         ports:
         - containerPort: 3550
         env:
@@ -280,7 +280,7 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-          image: tyrion75/westeros:v12102-checkoutservice
+          image: tyrion75/checkoutservice:latest
           ports:
           - containerPort: 5050
           readinessProbe:
@@ -362,7 +362,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v12102-shippingservice
+        image: tyrion75/shippingservice:latest
         ports:
         - containerPort: 50051
         env:
@@ -436,7 +436,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v12102-cartservice
+        image: tyrion75/cartservice:latest
         ports:
         - containerPort: 7070
         env:
@@ -508,7 +508,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: redis:alpine
+        image: tyrion75/image: redis:alpine:latest
         ports:
         - containerPort: 6379
         readinessProbe:
@@ -579,7 +579,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v12102-emailservice
+        image: tyrion75/emailservice:latest
         ports:
         - containerPort: 8080
         env:
@@ -654,7 +654,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v12102-paymentservice
+        image: tyrion75/paymentservice:latest
         ports:
         - containerPort: 50051
         env:
@@ -728,7 +728,7 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-          image: tyrion75/westeros:v12102-frontend
+          image: tyrion75/frontend:latest
           ports:
           - containerPort: 8080
           readinessProbe:
@@ -855,7 +855,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v12102-recommendationservice
+        image: tyrion75/recommendationservice:latest
         ports:
         - containerPort: 8080
         readinessProbe:
@@ -932,7 +932,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v12102-adservice
+        image: tyrion75/adservice:latest
         ports:
         - containerPort: 9555
         env:

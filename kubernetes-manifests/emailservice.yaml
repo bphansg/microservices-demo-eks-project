@@ -43,7 +43,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: tyrion75/westeros:v1${COMMIT_COUNT}-emailservice
+        image: tyrion75/emailservice:latest
         ports:
         - containerPort: 8080
         env:
