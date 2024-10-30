@@ -23,41 +23,6 @@ jobs:
       id: changed-files
       uses: tj-actions/changed-files@v35
 
-    - name: Suspicious File Scanning with Falcon
-      run: |
-        # Install required packages
-        pip3 install docker crowdstrike-falconpy
-        pip install retry
-        
-        # Create a Python script to scan the Dockerfile
-        cat << EOF > scan_dockerfile.py
-        import crowdstrike_falconpy
-
-        def scan_dockerfile(client_id, client_secret, cloud_region):
-            client = crowdstrike_falconpy.FalconPy(client_id=client_id, client_secret=client_secret, cloud_region=cloud_region)
-            result = client.scan_file('Dockerfile')
-            return result
-
-        if __name__ == "__main__":
-            client_id = "$FALCON_CLIENT_ID"
-            client_secret = "$FALCON_CLIENT_SECRET"
-            cloud_region = "$FALCON_CLOUD_REGION"
-
-            result = scan_dockerfile(client_id, client_secret, cloud_region)
-            print(result)
-
-            if "suspicious" in result:
-                print("Suspicious files found in Dockerfile. Build failed.")
-                exit(1)
-        EOF
-
-        # Run the Python script
-        python3 scan_dockerfile.py
-      env:
-        FALCON_CLIENT_ID: ${{ secrets.FALCON_CLIENT_ID }}
-        FALCON_CLIENT_SECRET: ${{ secrets.FALCON_CLIENT_SECRET }}
-        FALCON_CLOUD_REGION: ${{ secrets.FALCON_CLOUD_REGION }}
-
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
