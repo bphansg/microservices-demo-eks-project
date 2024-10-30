@@ -6,18 +6,16 @@ env:
   FALCON_CLIENT_ID: ${{ secrets.FALCON_CLIENT_ID }}
   FALCON_CLIENT_SECRET: ${{ secrets.FALCON_CLIENT_SECRET }}
   FALCON_CLOUD_REGION: ${{ secrets.FALCON_CLOUD_REGION }}
-  API_BASE_URL: ${{ secrets.API_BASE_URL }}
-  YOUR_CLOUD: ${{ secrets.YOUR_CLOUD }}
 
 jobs:
-  build-push-deploy:
+  build-scan-deploy:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout Code
       uses: actions/checkout@v3
       with:
-        fetch-depth: 0  # Ensures the entire repo history is checked out
+        fetch-depth: 0
 
     - name: Get changed files
       id: changed-files
@@ -32,92 +30,55 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    - name: Build and Scan Root Dockerfile
+      uses: CrowdStrike/container-image-scan@v1
+      with:
+        image: root-image:latest
+        falcon-client-id: ${{ secrets.FALCON_CLIENT_ID }}
+        falcon-client-secret: ${{ secrets.FALCON_CLIENT_SECRET }}
+        falcon-cloud-region: ${{ secrets.FALCON_CLOUD_REGION }}
+        json-report: root-image-scan-report.json
+
     - name: Check Docker Hub repositories, build/push images, and scan with Falcon
       run: |
-        # Get the list of changed files
         CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
         
-        # Install required packages for Falcon scanning
-        pip3 install docker crowdstrike-falconpy
-        pip install retry
-        git clone https://github.com/crowdstrike/container-image-scan
-        
-        # Loop through each service directory
         for dir in src/*/; do
           if [ -f "$dir/Dockerfile" ]; then
             service_name=$(basename "$dir")
             
             echo "Processing service: $service_name"
-            echo "Directory: $dir"
-            echo "Changed files: $CHANGED_FILES"
             
-            # Check if the corresponding YAML file exists in kubernetes-manifests/
-            if [ -f "kubernetes-manifests/${service_name}.yaml" ]; then
-              echo "Found kubernetes manifest for ${service_name}"
-              manifest_content=$(cat "kubernetes-manifests/${service_name}.yaml")
-              echo "Manifest content for ${service_name}:"
-              echo "$manifest_content"
-            else
-              echo "Warning: No kubernetes manifest found for ${service_name}"
-            fi
-            
-            # Check if the repository exists in Docker Hub
-            if ! curl -s -f -L -o /dev/null https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/$service_name; then
-              echo "Repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name does not exist in Docker Hub."
-              echo "Creating repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name in Docker Hub."
-            fi
-            
-            # Check if any files in this service directory have changed, if the image doesn't exist, or if it's the cartservice
             if [ "$service_name" == "cartservice" ] || echo "$CHANGED_FILES" | grep -q "$dir" || ! docker manifest inspect ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest > /dev/null 2>&1; then
-              echo "Building and pushing Docker image for $service_name."
+              echo "Building Docker image for $service_name."
               
-              # Build the Docker image
-              if docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"; then
-                echo "Successfully built image for $service_name"
+              docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"
+              
+              echo "Scanning Docker image for $service_name."
+              docker run --rm -e FALCON_CLIENT_ID -e FALCON_CLIENT_SECRET \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                quay.io/crowdstrike/container-image-scan:latest \
+                --repo ${{ secrets.DOCKERHUB_USERNAME }}/$service_name \
+                --tag latest \
+                --cloud-region $FALCON_CLOUD_REGION \
+                --json-report scan-report-$service_name.json
+              
+              scan_result=$?
+              
+              if [ $scan_result -eq 0 ]; then
+                echo "Image scan passed for $service_name. Pushing to Docker Hub."
+                docker push ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest
                 
-                # Scan the Docker image with Falcon
-                echo "Scanning Docker image for $service_name."
-                python3 container-image-scan/cs_scanimage.py --json-report report-$service_name.json --image ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest
+                sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" release/kubernetes-manifests.yaml
                 
-                # Print the image scan report
-                jq '.' report-$service_name.json
-                
-                # Check the image assessment policy
-                RESPONSE=$(curl \
-                  --header "Content-Type: application/x-www-form-urlencoded" \
-                  --data "client_id=$FALCON_CLIENT_ID&client_secret=$FALCON_CLIENT_SECRET" \
-                  --request POST \
-                  --silent $API_BASE_URL/oauth2/token)
-                CS_JWT=$(echo ${RESPONSE} | jq -r '.access_token')
-                ImageCheck=$(curl -s -X GET -H "authorization: Bearer ${CS_JWT}" \
-                  "https://container-upload.$YOUR_CLOUD/policy-checks?policy_type=image-prevention-policy&repository=${{ secrets.DOCKERHUB_USERNAME }}/$service_name&tag=latest")
-                DENY=$(echo $ImageCheck | jq '.resources[0].deny')
-                
-                # If the image assessment policy allows the image, push it
-                if [ "$DENY" != "true" ]; then
-                  # Push the Docker image
-                  if docker push ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest; then
-                    echo "Successfully pushed image for $service_name"
-                    
-                    # Update image references in YAML files
-                    sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" release/kubernetes-manifests.yaml
-                    
-                    # Update individual service manifest if it exists
-                    if [ -f "kubernetes-manifests/${service_name}.yaml" ]; then
-                      sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" "kubernetes-manifests/${service_name}.yaml"
-                      echo "Updated image reference in kubernetes-manifests/${service_name}.yaml"
-                    fi
-                  else
-                    echo "Failed to push image for $service_name"
-                  fi
-                else
-                  echo "Image assessment policy denied the image ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest. Skipping push."
+                if [ -f "kubernetes-manifests/${service_name}.yaml" ]; then
+                  sed -i "s|image: .*$service_name.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest|g" "kubernetes-manifests/${service_name}.yaml"
                 fi
               else
-                echo "Failed to build image for $service_name"
+                echo "Image scan failed for $service_name. Skipping push."
               fi
             else
-              echo "No changes detected and image exists for $service_name. Skipping build, scan, and push."
+              echo "No changes detected for $service_name. Skipping build, scan, and push."
             fi
           fi
         done
@@ -138,7 +99,6 @@ jobs:
       run: |
         kubectl apply -f release/kubernetes-manifests.yaml -n online-boutique --validate=false
         
-        # Apply individual service manifests
         for manifest in kubernetes-manifests/*.yaml; do
           kubectl apply -f "$manifest" --validate=false
         done
