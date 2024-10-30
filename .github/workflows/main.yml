@@ -29,18 +29,34 @@ jobs:
         pip3 install docker crowdstrike-falconpy
         pip install retry
         
-        # Scan the Dockerfile for suspicious files
-        echo "Scanning Dockerfile for suspicious files."
-        python3 -c "import crowdstrike_falconpy
-        client = crowdstrike_falconpy.FalconPy(client_id='$FALCON_CLIENT_ID', client_secret='$FALCON_CLIENT_SECRET', cloud_region='$FALCON_CLOUD_REGION')
-        result = client.scan_file('Dockerfile')
-        print(result)"
-        
-        # Check the scan result and fail the build if suspicious files are found
-        if echo "$result" | grep -q "suspicious"; then
-          echo "Suspicious files found in Dockerfile. Build failed."
-          exit 1
-        fi
+        # Create a Python script to scan the Dockerfile
+        cat << EOF > scan_dockerfile.py
+        import crowdstrike_falconpy
+
+        def scan_dockerfile(client_id, client_secret, cloud_region):
+            client = crowdstrike_falconpy.FalconPy(client_id=client_id, client_secret=client_secret, cloud_region=cloud_region)
+            result = client.scan_file('Dockerfile')
+            return result
+
+        if __name__ == "__main__":
+            client_id = "$FALCON_CLIENT_ID"
+            client_secret = "$FALCON_CLIENT_SECRET"
+            cloud_region = "$FALCON_CLOUD_REGION"
+
+            result = scan_dockerfile(client_id, client_secret, cloud_region)
+            print(result)
+
+            if "suspicious" in result:
+                print("Suspicious files found in Dockerfile. Build failed.")
+                exit(1)
+        EOF
+
+        # Run the Python script
+        python3 scan_dockerfile.py
+      env:
+        FALCON_CLIENT_ID: ${{ secrets.FALCON_CLIENT_ID }}
+        FALCON_CLIENT_SECRET: ${{ secrets.FALCON_CLIENT_SECRET }}
+        FALCON_CLOUD_REGION: ${{ secrets.FALCON_CLOUD_REGION }}
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
