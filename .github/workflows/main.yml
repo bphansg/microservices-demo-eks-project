@@ -2,67 +2,118 @@ name: Build, Push and Deploy Docker Images - CNAPP demo (BP)
 
 on: push
 
+env:
+  FALCON_CLIENT_ID: ${{ secrets.FALCON_CLIENT_ID }}
+  FALCON_CLIENT_SECRET: ${{ secrets.FALCON_CLIENT_SECRET }}
+  FALCON_CLOUD_REGION: ${{ secrets.FALCON_CLOUD_REGION }}
+  API_BASE_URL: ${{ secrets.API_BASE_URL }}
+  YOUR_CLOUD: ${{ secrets.YOUR_CLOUD }}
+
 jobs:
   build-push-deploy:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Ensures the entire repo history is checked out
+    - name: Checkout Code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Ensures the entire repo history is checked out
 
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v35
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@v35
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+    - name: Suspicious File Scanning with Falcon
+      run: |
+        # Install required packages
+        pip3 install docker crowdstrike-falconpy
+        pip install retry
+        
+        # Scan the Dockerfile for suspicious files
+        echo "Scanning Dockerfile for suspicious files."
+        python3 -c "import crowdstrike_falconpy
+        client = crowdstrike_falconpy.FalconPy(client_id='$FALCON_CLIENT_ID', client_secret='$FALCON_CLIENT_SECRET', cloud_region='$FALCON_CLOUD_REGION')
+        result = client.scan_file('Dockerfile')
+        print(result)"
+        
+        # Check the scan result and fail the build if suspicious files are found
+        if echo "$result" | grep -q "suspicious"; then
+          echo "Suspicious files found in Dockerfile. Build failed."
+          exit 1
+        fi
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
-      - name: Check Docker Hub repositories and build/push images
-        run: |
-          # Get the list of changed files
-          CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
-          
-          # Loop through each service directory
-          for dir in src/*/; do
-            if [ -f "$dir/Dockerfile" ]; then
-              service_name=$(basename "$dir")
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Check Docker Hub repositories, build/push images, and scan with Falcon
+      run: |
+        # Get the list of changed files
+        CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+        
+        # Install required packages for Falcon scanning
+        pip3 install docker crowdstrike-falconpy
+        pip install retry
+        git clone https://github.com/crowdstrike/container-image-scan
+        
+        # Loop through each service directory
+        for dir in src/*/; do
+          if [ -f "$dir/Dockerfile" ]; then
+            service_name=$(basename "$dir")
+            
+            echo "Processing service: $service_name"
+            echo "Directory: $dir"
+            echo "Changed files: $CHANGED_FILES"
+            
+            # Check if the corresponding YAML file exists in kubernetes-manifests/
+            if [ -f "kubernetes-manifests/${service_name}.yaml" ]; then
+              echo "Found kubernetes manifest for ${service_name}"
+              manifest_content=$(cat "kubernetes-manifests/${service_name}.yaml")
+              echo "Manifest content for ${service_name}:"
+              echo "$manifest_content"
+            else
+              echo "Warning: No kubernetes manifest found for ${service_name}"
+            fi
+            
+            # Check if the repository exists in Docker Hub
+            if ! curl -s -f -L -o /dev/null https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/$service_name; then
+              echo "Repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name does not exist in Docker Hub."
+              echo "Creating repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name in Docker Hub."
+            fi
+            
+            # Check if any files in this service directory have changed, if the image doesn't exist, or if it's the cartservice
+            if [ "$service_name" == "cartservice" ] || echo "$CHANGED_FILES" | grep -q "$dir" || ! docker manifest inspect ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest > /dev/null 2>&1; then
+              echo "Building and pushing Docker image for $service_name."
               
-              echo "Processing service: $service_name"
-              echo "Directory: $dir"
-              echo "Changed files: $CHANGED_FILES"
-              
-              # Check if the corresponding YAML file exists in kubernetes-manifests/
-              if [ -f "kubernetes-manifests/${service_name}.yaml" ]; then
-                echo "Found kubernetes manifest for ${service_name}"
-                # Read the manifest file
-                manifest_content=$(cat "kubernetes-manifests/${service_name}.yaml")
-                echo "Manifest content for ${service_name}:"
-                echo "$manifest_content"
-              else
-                echo "Warning: No kubernetes manifest found for ${service_name}"
-              fi
-              
-              # Check if the repository exists in Docker Hub
-              if ! curl -s -f -L -o /dev/null https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/$service_name; then
-                echo "Repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name does not exist in Docker Hub."
-                echo "Creating repository ${{ secrets.DOCKERHUB_USERNAME }}/$service_name in Docker Hub."
-              fi
-              
-              # Check if any files in this service directory have changed, if the image doesn't exist, or if it's the cartservice
-              if [ "$service_name" == "cartservice" ] || echo "$CHANGED_FILES" | grep -q "$dir" || ! docker manifest inspect ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest > /dev/null 2>&1; then
-                echo "Building and pushing Docker image for $service_name."
+              # Build the Docker image
+              if docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"; then
+                echo "Successfully built image for $service_name"
                 
-                # Build the Docker image
-                if docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest "$dir"; then
-                  echo "Successfully built image for $service_name"
-                  
+                # Scan the Docker image with Falcon
+                echo "Scanning Docker image for $service_name."
+                python3 container-image-scan/cs_scanimage.py --json-report report-$service_name.json --image ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest
+                
+                # Print the image scan report
+                jq '.' report-$service_name.json
+                
+                # Check the image assessment policy
+                RESPONSE=$(curl \
+                  --header "Content-Type: application/x-www-form-urlencoded" \
+                  --data "client_id=$FALCON_CLIENT_ID&client_secret=$FALCON_CLIENT_SECRET" \
+                  --request POST \
+                  --silent $API_BASE_URL/oauth2/token)
+                CS_JWT=$(echo ${RESPONSE} | jq -r '.access_token')
+                ImageCheck=$(curl -s -X GET -H "authorization: Bearer ${CS_JWT}" \
+                  "https://container-upload.$YOUR_CLOUD/policy-checks?policy_type=image-prevention-policy&repository=${{ secrets.DOCKERHUB_USERNAME }}/$service_name&tag=latest")
+                DENY=$(echo $ImageCheck | jq '.resources[0].deny')
+                
+                # If the image assessment policy allows the image, push it
+                if [ "$DENY" != "true" ]; then
                   # Push the Docker image
                   if docker push ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest; then
                     echo "Successfully pushed image for $service_name"
@@ -79,38 +130,41 @@ jobs:
                     echo "Failed to push image for $service_name"
                   fi
                 else
-                  echo "Failed to build image for $service_name"
+                  echo "Image assessment policy denied the image ${{ secrets.DOCKERHUB_USERNAME }}/$service_name:latest. Skipping push."
                 fi
               else
-                echo "No changes detected and image exists for $service_name. Skipping build and push."
+                echo "Failed to build image for $service_name"
               fi
+            else
+              echo "No changes detected and image exists for $service_name. Skipping build, scan, and push."
             fi
-          done
+          fi
+        done
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Update kubeconfig
-        run: |
-          aws eks update-kubeconfig --name BP-test --region ${{ secrets.AWS_REGION }}
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --name BP-test --region ${{ secrets.AWS_REGION }}
 
-      - name: Apply updated Kubernetes manifests in EKS
-        run: |
-          kubectl apply -f release/kubernetes-manifests.yaml -n online-boutique --validate=false
-          
-          # Apply individual service manifests
-          for manifest in kubernetes-manifests/*.yaml; do
-            kubectl apply -f "$manifest" --validate=false
-          done
+    - name: Apply updated Kubernetes manifests in EKS
+      run: |
+        kubectl apply -f release/kubernetes-manifests.yaml -n online-boutique --validate=false
+        
+        # Apply individual service manifests
+        for manifest in kubernetes-manifests/*.yaml; do
+          kubectl apply -f "$manifest" --validate=false
+        done
 
-      - name: Commit and push updates to YAML files
-        run: |
-          git config --global user.email "binhphan@me.com"
-          git config --global user.name "bphansg"
-          git add release/kubernetes-manifests.yaml kubernetes-manifests/*.yaml
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update Docker image references in YAML files" && git push)
+    - name: Commit and push updates to YAML files
+      run: |
+        git config --global user.email "binhphan@me.com"
+        git config --global user.name "bphansg"
+        git add release/kubernetes-manifests.yaml kubernetes-manifests/*.yaml
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Update Docker image references in YAML files" && git push)
